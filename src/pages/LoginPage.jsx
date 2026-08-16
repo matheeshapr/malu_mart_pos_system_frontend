@@ -21,7 +21,8 @@ const LoginPage = () => {
       if (response.status === 200) {
         const { role } = response.data.user;
         
-        // Role එක අනුව අදාළ පිටුවට යැවීම
+        localStorage.setItem('userRole', role);
+        
         if (role === 'admin') {
           navigate('/admin');
         } else {
