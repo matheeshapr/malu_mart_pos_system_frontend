@@ -1,15 +1,49 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import LoginPage from './pages/LoginPage';
 import POSPage from './pages/POSPage';
 import AdminDashboard from './pages/AdminDashboard';
+// අලුත් Customer Store එක Import කිරීම
+import CustomerStore from './pages/CustomerStore'; 
+
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const userRole = localStorage.getItem('userRole');
+
+  if (!userRole) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(userRole)) {
+    return userRole === 'admin' ? <Navigate to="/admin" replace /> : <Navigate to="/pos" replace />;
+  }
+
+  return children;
+};
 
 function App() {
   return (
     <Router>
       <Routes>
         <Route path="/" element={<LoginPage />} />
-        <Route path="/pos" element={<POSPage />} />
-        <Route path="/admin" element={<AdminDashboard />} />
+        
+        {/* NEW: Public Route - ඕනෑම කෙනෙකුට ලොග් නොවී යා හැක */}
+        <Route path="/store" element={<CustomerStore />} />
+        
+        <Route 
+          path="/pos" 
+          element={
+            <ProtectedRoute allowedRoles={['admin', 'cashier']}>
+              <POSPage />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute allowedRoles={['admin']}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } 
+        />
       </Routes>
     </Router>
   );
