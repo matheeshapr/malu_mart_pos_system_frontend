@@ -2,8 +2,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import LoginPage from './pages/LoginPage';
 import POSPage from './pages/POSPage';
 import AdminDashboard from './pages/AdminDashboard';
-// අලුත් Customer Store එක Import කිරීම
 import CustomerStore from './pages/CustomerStore'; 
+import CustomerProfile from './pages/CustomerProfile';
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const userRole = localStorage.getItem('userRole');
@@ -25,8 +25,9 @@ function App() {
       <Routes>
         <Route path="/" element={<LoginPage />} />
         
-        {/* NEW: Public Route - ඕනෑම කෙනෙකුට ලොග් නොවී යා හැක */}
+        {/* Public Routes */}
         <Route path="/store" element={<CustomerStore />} />
+        <Route path="/profile" element={<CustomerProfile />} />
         
         <Route 
           path="/pos" 
