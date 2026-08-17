@@ -106,7 +106,7 @@ const POSPage = () => {
         try {
             const response = await api.post('/sales', saleData);
             if (response.status === 201) {
-                setReceiptData({ billNo: `ORD-${String(response.data.sale_id).padStart(4, '0')}`, date: new Date().toLocaleString(), items: [...cart], total: netTotal, isOnlinePickup: false });
+                setReceiptData({ billNo: `POS-${String(response.data.sale_id).padStart(4, '0')}`, date: new Date().toLocaleString(), items: [...cart], total: netTotal, isOnlinePickup: false });
                 setCart([]); setSearchQuery(""); fetchData();
                 setTimeout(() => window.print(), 300);
             }
@@ -114,11 +114,11 @@ const POSPage = () => {
     };
 
     const handlePickupPayment = async (sale) => {
-        if(window.confirm(`Receive Rs.${sale.net_total} for Order ORD-${String(sale.id).padStart(4, '0')}?`)){
+        if(window.confirm(`Receive Rs.${sale.net_total} for Order ONL-${String(sale.id).padStart(4, '0')}?`)){
             try {
                 await api.put(`/sales/${sale.id}`, { payment_status: 'Paid' });
                 setReceiptData({
-                    billNo: `ORD-${String(sale.id).padStart(4, '0')}`,
+                    billNo: `ONL-${String(sale.id).padStart(4, '0')}`,
                     date: new Date().toLocaleString(),
                     items: [], 
                     total: Number(sale.net_total),
@@ -133,8 +133,13 @@ const POSPage = () => {
 
     const filteredProducts = products.filter(product => product.name.toLowerCase().includes(searchQuery.toLowerCase()) || (product.barcode && product.barcode.includes(searchQuery)) || (product.plu_code && product.plu_code.includes(searchQuery)));
     
-    const formatOrderCode = (id) => `ORD-${String(id).padStart(4, '0')}`;
-    const pendingOrders = sales.filter(s => s.payment_status === 'Pending' && formatOrderCode(s.id).toLowerCase().includes(pickupSearch.toLowerCase()));
+    // customer_id තිබේ නම් ONL- හෝ නැත්නම් POS- ලෙස කේතය සකස් කිරීම
+    const formatOrderCode = (sale) => {
+        const prefix = sale.customer_id ? 'ONL' : 'POS';
+        return `${prefix}-${String(sale.id).padStart(4, '0')}`;
+    };
+
+    const pendingOrders = sales.filter(s => s.payment_status === 'Pending' && formatOrderCode(s).toLowerCase().includes(pickupSearch.toLowerCase()));
 
     return (
         <>
@@ -216,7 +221,7 @@ const POSPage = () => {
                         </div>
                         <div className="p-6">
                             <input 
-                                type="text" placeholder="Scan or Type Order Code (e.g. ORD-0012)" 
+                                type="text" placeholder="Scan or Type Order Code (e.g. ONL-0012)" 
                                 value={pickupSearch} onChange={(e) => setPickupSearch(e.target.value)} 
                                 className="w-full px-4 py-3 mb-6 border-2 border-yellow-300 rounded-xl focus:outline-none focus:border-yellow-500 text-lg font-bold text-center uppercase" autoFocus
                             />
@@ -229,7 +234,7 @@ const POSPage = () => {
                                         {pendingOrders.map(sale => (
                                             <div key={sale.id} className="flex justify-between items-center p-4 border border-gray-200 rounded-xl hover:bg-yellow-50 transition-colors">
                                                 <div>
-                                                    <h3 className="text-2xl font-black text-blue-600">{formatOrderCode(sale.id)}</h3>
+                                                    <h3 className="text-2xl font-black text-blue-600">{formatOrderCode(sale)}</h3>
                                                     <p className="text-sm font-bold text-gray-800 mt-1">
                                                         👤 {sale.customer_name || 'Guest'} | 📞 {sale.customer_phone || 'N/A'} {sale.nic && `| 🆔 NIC: ${sale.nic}`}
                                                     </p>
@@ -238,7 +243,7 @@ const POSPage = () => {
                                                 <div className="text-right flex items-center gap-4">
                                                     <span className="text-2xl font-black text-gray-800">Rs.{Number(sale.net_total).toFixed(2)}</span>
                                                     <button onClick={() => handlePickupPayment(sale)} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">
-                                                        Collect & Print
+                                                        Collect
                                                     </button>
                                                 </div>
                                             </div>

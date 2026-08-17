@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable'; 
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -16,10 +18,22 @@ const AdminDashboard = () => {
   const [lowStockCount, setLowStockCount] = useState(0);
   const [products, setProducts] = useState([]);
   const [sales, setSales] = useState([]);
-  const [customers, setCustomers] = useState([]); // NEW: Customers State
-
+  const [customers, setCustomers] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [users, setUsers] = useState([]);
+
   const [searchQuery, setSearchQuery] = useState("");
+  const [newCategoryName, setNewCategoryName] = useState("");
+
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(todayStr);
+
+  // Staff Form States
+  const [staffName, setStaffName] = useState("");
+  const [staffPin, setStaffPin] = useState("");
+  const [staffPhone, setStaffPhone] = useState("");
+  const [staffRole, setStaffRole] = useState("cashier");
 
   const initialFormState = {
     category_id: '', name: '', is_weighed: false, plu_code: '', barcode: '',
@@ -36,11 +50,12 @@ const AdminDashboard = () => {
 
   const fetchDashboardData = async () => {
     try {
-      const [salesRes, productsRes, categoriesRes, customersRes] = await Promise.all([
+      const [salesRes, productsRes, categoriesRes, customersRes, usersRes] = await Promise.all([
         api.get('/sales'),
         api.get('/products'),
         api.get('/categories'),
-        api.get('/customers') // Fetching registered customers
+        api.get('/customers'),
+        api.get('/users')
       ]);
 
       const salesData = salesRes.data.sort((a, b) => b.id - a.id);
@@ -50,6 +65,7 @@ const AdminDashboard = () => {
       setSales(salesData);
       setCategories(categoriesRes.data);
       setCustomers(customersRes.data);
+      setUsers(usersRes.data);
 
       const today = new Date().setHours(0, 0, 0, 0);
       const todaysSales = salesData.filter(sale => {
@@ -70,6 +86,47 @@ const AdminDashboard = () => {
       console.error("Error fetching dashboard data:", error);
     }
   };
+
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(18);
+    doc.text("MaluMart Sales Report", 14, 15);
+    doc.setFontSize(10);
+    doc.text(`Period: ${startDate} to ${endDate}`, 14, 22);
+
+    // Table Data (customer_id අනුව ONL හෝ POS ලෙස කේතය සැකසීම)
+    const tableColumn = ["Order ID", "Type", "Date & Time", "Total (Rs.)", "Status"];
+    const tableRows = filteredSales.map(sale => [
+        `${sale.customer_id ? 'ONL' : 'POS'}-${String(sale.id).padStart(4, '0')}`,
+        sale.customer_id ? 'Online' : 'POS',
+        new Date(sale.sale_date).toLocaleString(),
+        Number(sale.net_total).toFixed(2),
+        sale.payment_status
+    ]);
+
+    // Generate Table
+    autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 30,
+        theme: 'striped',
+        headStyles: { fillColor: [41, 128, 185] },
+    });
+
+    // Add Total Revenue Footer
+    const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 30;
+    doc.text(`Total Revenue: Rs. ${filteredSales.reduce((sum, s) => sum + Number(s.net_total), 0).toFixed(2)}`, 14, finalY + 10);
+
+    // Save PDF
+    doc.save(`MaluMart_Sales_${startDate}_to_${endDate}.pdf`);
+  };
+
+  const filteredSales = sales.filter(sale => {
+    const saleDate = new Date(sale.sale_date).toISOString().split('T')[0];
+    return saleDate >= startDate && saleDate <= endDate;
+  });
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -96,6 +153,59 @@ const AdminDashboard = () => {
       setNewProduct(initialFormState);
     } catch (error) {
       window.alert("Failed to add product. Ensure PLU/Barcode is unique.");
+    }
+  };
+
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    if (!newCategoryName.trim()) return;
+    try {
+      await api.post('/categories', { name: newCategoryName });
+      window.alert("Category added successfully!");
+      setNewCategoryName("");
+      fetchDashboardData();
+    } catch (error) {
+      window.alert("Failed to add category. It may already exist.");
+    }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (window.confirm("Are you sure you want to delete this category?")) {
+      try {
+        await api.delete(`/categories/${id}`);
+        window.alert("Category deleted successfully!");
+        fetchDashboardData();
+      } catch (error) {
+        window.alert("Cannot delete category. Products might be linked to it.");
+      }
+    }
+  };
+
+  const handleAddStaffUser = async (e) => {
+    e.preventDefault();
+    if (!staffName.trim() || !staffPin.trim()) return;
+    try {
+      await api.post('/users', { name: staffName, pin_code: staffPin, phone: staffPhone, role: staffRole });
+      window.alert("Staff user created successfully!");
+      setStaffName("");
+      setStaffPin("");
+      setStaffPhone("");
+      setStaffRole("cashier");
+      fetchDashboardData();
+    } catch (error) {
+      window.alert(error.response?.data?.error || "Failed to create user.");
+    }
+  };
+
+  const handleDeleteStaffUser = async (id) => {
+    if (window.confirm("Are you sure you want to delete this staff user?")) {
+      try {
+        await api.delete(`/users/${id}`);
+        window.alert("Staff user deleted successfully!");
+        fetchDashboardData();
+      } catch (error) {
+        window.alert("Failed to delete user.");
+      }
     }
   };
 
@@ -191,6 +301,18 @@ const AdminDashboard = () => {
             className={`w-full text-left py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'products' ? 'bg-blue-600 shadow-md' : 'hover:bg-gray-700'}`}
           >
             Products Management
+          </button>
+          <button
+            onClick={() => setActiveTab('categories')}
+            className={`w-full text-left py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'categories' ? 'bg-blue-600 shadow-md' : 'hover:bg-gray-700'}`}
+          >
+            Category Management
+          </button>
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`w-full text-left py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'users' ? 'bg-blue-600 shadow-md' : 'hover:bg-gray-700'}`}
+          >
+            Staff Management
           </button>
           <button
             onClick={() => setActiveTab('sales')}
@@ -371,10 +493,205 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* TAB 3: SALES */}
+        {/* TAB 3: CATEGORIES MANAGEMENT */}
+        {activeTab === 'categories' && (
+          <div className="animate-fade-in">
+            <h1 className="text-3xl font-black text-gray-800 mb-8">Category Management</h1>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8 max-w-xl">
+              <h2 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Add New Category</h2>
+              <form onSubmit={handleAddCategory} className="flex gap-4">
+                <input
+                  type="text"
+                  placeholder="Category Name (e.g. Sea Food, Drinks)"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  required
+                  className="flex-1 border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+                <button type="submit" className="font-bold py-2.5 px-6 rounded-lg text-white bg-blue-600 hover:bg-blue-700 shadow-md">
+                  + Add
+                </button>
+              </form>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-w-2xl">
+              <div className="p-5 border-b border-gray-100 bg-gray-50">
+                <h2 className="text-lg font-bold text-gray-800">Existing Categories</h2>
+              </div>
+              <table className="min-w-full leading-normal">
+                <thead>
+                  <tr className="bg-white text-gray-500 text-left text-xs uppercase font-black tracking-wider border-b-2 border-gray-100">
+                    <th className="px-6 py-4">ID</th>
+                    <th className="px-6 py-4">Category Name</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categories.map(cat => (
+                    <tr key={cat.id} className="hover:bg-gray-50 border-b">
+                      <td className="px-6 py-4 text-sm font-bold text-gray-800">#{cat.id}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-blue-600">{cat.name}</td>
+                      <td className="px-6 py-4 text-sm text-right">
+                        <button onClick={() => handleDeleteCategory(cat.id)} className="text-red-500 hover:text-red-700 font-bold px-3 py-1 bg-red-100 rounded">
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: STAFF MANAGEMENT */}
+        {activeTab === 'users' && (
+          <div className="animate-fade-in">
+            <h1 className="text-3xl font-black text-gray-800 mb-8">Staff & Cashier Management</h1>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8 max-w-xl">
+              <h2 className="text-lg font-bold text-gray-800 mb-4 border-b pb-2">Add New Staff Member</h2>
+              <form onSubmit={handleAddStaffUser} className="space-y-4">
+                <div>
+                  <label className="block text-gray-700 text-xs font-bold uppercase mb-1">Name *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. John Doe"
+                    value={staffName}
+                    onChange={(e) => setStaffName(e.target.value)}
+                    required
+                    className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-xs font-bold uppercase mb-1">Pin Code *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1234"
+                    value={staffPin}
+                    onChange={(e) => setStaffPin(e.target.value)}
+                    required
+                    className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-xs font-bold uppercase mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    placeholder="e.g. 0771234567"
+                    value={staffPhone}
+                    onChange={(e) => setStaffPhone(e.target.value)}
+                    className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-xs font-bold uppercase mb-1">Role *</label>
+                  <select
+                    value={staffRole}
+                    onChange={(e) => setStaffRole(e.target.value)}
+                    className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="cashier">Cashier</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+                <button type="submit" className="w-full font-bold py-2.5 rounded-lg text-white bg-blue-600 hover:bg-blue-700 shadow-md">
+                  + Create Staff Account
+                </button>
+              </form>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden max-w-4xl">
+              <div className="p-5 border-b border-gray-100 bg-gray-50">
+                <h2 className="text-lg font-bold text-gray-800">Staff Accounts List</h2>
+              </div>
+              <table className="min-w-full leading-normal">
+                <thead>
+                  <tr className="bg-white text-gray-500 text-left text-xs uppercase font-black tracking-wider border-b-2 border-gray-100">
+                    <th className="px-6 py-4">ID</th>
+                    <th className="px-6 py-4">Name</th>
+                    <th className="px-6 py-4">Role</th>
+                    <th className="px-6 py-4">Pin Code</th>
+                    <th className="px-6 py-4">Phone</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id} className="hover:bg-gray-50 border-b">
+                      <td className="px-6 py-4 text-sm font-bold text-gray-800">#{u.id}</td>
+                      <td className="px-6 py-4 text-sm font-bold text-blue-600">{u.name}</td>
+                      <td className="px-6 py-4 text-sm">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                          {u.role}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm font-mono text-gray-600">{u.pin_code}</td>
+                      <td className="px-6 py-4 text-sm font-mono text-gray-600">{u.phone || '-'}</td>
+                      <td className="px-6 py-4 text-sm">
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {u.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-right">
+                        <button onClick={() => handleDeleteStaffUser(u.id)} className="text-red-500 hover:text-red-700 font-bold px-3 py-1 bg-red-100 rounded">
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: SALES */}
         {activeTab === 'sales' && (
           <div className="animate-fade-in">
-            <h1 className="text-3xl font-black text-gray-800 mb-8">Orders & Sales History</h1>
+            <div className="flex justify-between items-center mb-6 print:hidden">
+              <h1 className="text-3xl font-black text-gray-800">Orders & Sales History</h1>
+              <button
+                onClick={generatePDF}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow-md ml-auto"
+              >
+                📥 Download PDF Report
+              </button>
+            </div>
+
+            {/* Date Filter Bar */}
+            <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-wrap gap-4 items-end print:hidden">
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">From Date</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="border rounded-lg p-2.5 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-600 uppercase mb-1">To Date</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="border rounded-lg p-2.5 bg-gray-50 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="text-sm font-bold text-gray-500 ml-auto pb-2">
+                Showing <span className="text-blue-600 font-black">{filteredSales.length}</span> records
+              </div>
+            </div>
+
+            {/* Print Header */}
+            <div className="hidden print:block mb-6 text-center border-b pb-4">
+              <h1 className="text-2xl font-black">MALUMART SALES REPORT</h1>
+              <p className="text-gray-600 text-sm mt-1">Period: {startDate} to {endDate}</p>
+            </div>
+
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <table className="min-w-full leading-normal">
                 <thead>
@@ -383,51 +700,70 @@ const AdminDashboard = () => {
                     <th className="px-6 py-4">Type</th>
                     <th className="px-6 py-4">Date & Time</th>
                     <th className="px-6 py-4">Total Amount</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Action</th>
+                    <th className="px-6 py-4 print:hidden">Status</th>
+                    <th className="px-6 py-4 text-right print:hidden">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {sales.map(sale => {
-                    const isPending = sale.payment_status === 'Pending';
-                    const isOnline = Number(sale.paid_amount) === 0;
-                    
-                    return (
-                      <tr key={sale.id} className={`border-b transition-colors ${isPending ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-gray-50'}`}>
-                        <td className="px-6 py-4 text-sm font-black text-gray-800">
-                          ORD-{String(sale.id).padStart(4, '0')}
-                        </td>
-                        <td className="px-6 py-4 text-sm font-bold">
-                          {isOnline ? (
-                            <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs">🌐 Online</span>
-                          ) : (
-                            <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs">🏪 POS</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-sm text-gray-500 font-medium">{new Date(sale.sale_date).toLocaleString()}</td>
-                        <td className="px-6 py-4 text-sm font-black text-gray-800">Rs. {Number(sale.net_total).toFixed(2)}</td>
-                        <td className="px-6 py-4 text-sm">
-                          <span className={`px-3 py-1 rounded-full text-xs font-bold ${isPending ? 'bg-yellow-200 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
-                            {sale.payment_status}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-sm text-right">
-                          {isPending ? (
-                            <span className="text-yellow-600 font-bold text-xs uppercase tracking-wider">Waiting for Cashier</span>
-                          ) : (
-                            <span className="text-gray-400 font-bold text-xs uppercase tracking-wider">Completed</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {filteredSales.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" className="px-6 py-10 text-center text-gray-400 font-semibold">
+                        No sales records found for this date range.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSales.map(sale => {
+                      const isPending = sale.payment_status === 'Pending';
+                      const isOnline = Boolean(sale.customer_id);
+
+                      return (
+                        <tr key={sale.id} className={`border-b transition-colors ${isPending ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-gray-50'}`}>
+                          <td className="px-6 py-4 text-sm font-black text-gray-800">
+                            {sale.customer_id ? 'ONL' : 'POS'}-{String(sale.id).padStart(4, '0')}
+                          </td>
+                          <td className="px-6 py-4 text-sm font-bold">
+                            {isOnline ? (
+                              <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-xs">🌐 Online</span>
+                            ) : (
+                              <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs">🏪 POS</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-500 font-medium">{new Date(sale.sale_date).toLocaleString()}</td>
+                          <td className="px-6 py-4 text-sm font-black text-gray-800">Rs. {Number(sale.net_total).toFixed(2)}</td>
+                          <td className="px-6 py-4 text-sm print:hidden">
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${isPending ? 'bg-yellow-200 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+                              {sale.payment_status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-right print:hidden">
+                            {isPending ? (
+                              <span className="text-yellow-600 font-bold text-xs uppercase tracking-wider">Waiting for Cashier</span>
+                            ) : (
+                              <span className="text-gray-400 font-bold text-xs uppercase tracking-wider">Completed</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
+                {filteredSales.length > 0 && (
+                  <tfoot className="bg-gray-50 font-black">
+                    <tr>
+                      <td colSpan="3" className="px-6 py-4 text-right uppercase text-xs text-gray-500">Total Revenue:</td>
+                      <td className="px-6 py-4 text-blue-600 text-base">
+                        Rs. {filteredSales.reduce((sum, s) => sum + Number(s.net_total), 0).toFixed(2)}
+                      </td>
+                      <td colSpan="2" className="print:hidden"></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
         )}
 
-        {/* TAB 4: CUSTOMERS LIST */}
+        {/* TAB 6: CUSTOMERS LIST */}
         {activeTab === 'customers' && (
           <div className="animate-fade-in">
             <h1 className="text-3xl font-black text-gray-800 mb-8">Registered Customers</h1>
