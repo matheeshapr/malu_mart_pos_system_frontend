@@ -17,9 +17,30 @@ const POSPage = () => {
     const [searchQuery, setSearchQuery] = useState("");
     const [receiptData, setReceiptData] = useState(null);
 
+    // CHECKOUT & PAYMENT MODAL STATES
+    const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState('Cash');
+    const [cashGiven, setCashGiven] = useState('');
+
     // PICKUP MODAL STATES
     const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
     const [pickupSearch, setPickupSearch] = useState("");
+
+    // --- Toast Alert States ---
+    const [alertInfo, setAlertInfo] = useState({ show: false, message: '', type: 'success' });
+
+    const showAlert = (message, type = 'success') => {
+        setAlertInfo({ show: true, message, type });
+        setTimeout(() => {
+            setAlertInfo({ show: false, message: '', type: 'success' });
+        }, 4000);
+    };
+
+    // --- Custom Confirm Modal State ---
+    const [confirmModal, setConfirmModal] = useState({ show: false, message: '', onConfirm: null });
+
+    // --- Custom Weight Prompt Modal State ---
+    const [weightPrompt, setWeightPrompt] = useState({ show: false, product: null, weight: "1" });
 
     const barcodeBuffer = useRef("");
     const typingTimeout = useRef(null);
@@ -62,11 +83,11 @@ const POSPage = () => {
             const weightInKg = Number(scannedCode.substring(7, 12)) / 1000;
             const matchedProduct = products.find(p => p.plu_code === pluCode);
             if (matchedProduct) addToCart(matchedProduct, weightInKg);
-            else window.alert(`Weighed product not found for PLU: ${pluCode}`);
+            else showAlert(`Weighed product not found for PLU: ${pluCode}`, "error");
         } else {
             const matchedProduct = products.find(p => p.barcode === scannedCode);
             if (matchedProduct) addToCart(matchedProduct);
-            else window.alert("Product not found for barcode: " + scannedCode);
+            else showAlert("Product not found for barcode: " + scannedCode, "error");
         }
     };
 
@@ -77,14 +98,31 @@ const POSPage = () => {
         setManualBarcode("");
     };
 
+    // --- Add to Cart Logic (Re-written for Custom Modal) ---
     const addToCart = (product, scannedWeight = null) => {
-        let qty = 1;
         if (product.is_weighed && scannedWeight === null) {
-            const input = window.prompt(`Enter weight for ${product.name} (in Kg):`, "1");
-            if (!input || isNaN(input) || Number(input) <= 0) return;
-            qty = Number(input);
-        } else if (scannedWeight !== null) qty = scannedWeight;
+            // Open custom weight prompt instead of window.prompt
+            setWeightPrompt({ show: true, product: product, weight: "1" });
+            return; 
+        } 
+        
+        // If not weighed, or if scanned via barcode scale, proceed directly
+        const qty = scannedWeight !== null ? scannedWeight : 1;
+        finalizeAddToCart(product, qty);
+    };
 
+    const handleWeightConfirm = (e) => {
+        e.preventDefault(); // Prevent form default submission
+        const qty = Number(weightPrompt.weight);
+        if (!qty || isNaN(qty) || qty <= 0) {
+            showAlert("Please enter a valid weight!", "error");
+            return;
+        }
+        finalizeAddToCart(weightPrompt.product, qty);
+        setWeightPrompt({ show: false, product: null, weight: "1" }); // Close modal
+    };
+
+    const finalizeAddToCart = (product, qty) => {
         setCart((prevCart) => {
             const existing = prevCart.find((item) => item.product_id === product.id);
             if (existing) {
@@ -95,45 +133,78 @@ const POSPage = () => {
                 );
             } else return [...prevCart, { product_id: product.id, name: product.name, unit_price: product.selling_price, quantity: qty, sub_total: qty * product.selling_price }];
         });
+        showAlert(`${product.name} added to bill`, "success");
     };
 
     const removeFromCart = (productId) => setCart(cart.filter(item => item.product_id !== productId));
     const netTotal = cart.reduce((sum, item) => sum + item.sub_total, 0);
 
-    const handleCheckout = async () => {
-        if (cart.length === 0) return;
+    const handleConfirmCheckout = async () => {
+        if (paymentMethod === 'Cash' && Number(cashGiven) < netTotal) {
+            showAlert("Cash given cannot be less than the net total!", "error");
+            return;
+        }
+
         const saleData = { user_id: null, customer_id: null, sub_total: netTotal, discount: 0.00, net_total: netTotal, paid_amount: netTotal, payment_status: "Paid", items: cart };
         try {
             const response = await api.post('/sales', saleData);
             if (response.status === 201) {
-                setReceiptData({ billNo: `POS-${String(response.data.sale_id).padStart(4, '0')}`, date: new Date().toLocaleString(), items: [...cart], total: netTotal, isOnlinePickup: false });
-                setCart([]); setSearchQuery(""); fetchData();
+                setReceiptData({ 
+                    billNo: `POS-${String(response.data.sale_id).padStart(4, '0')}`, 
+                    date: new Date().toLocaleString(), 
+                    items: [...cart], 
+                    total: netTotal, 
+                    paymentMethod: paymentMethod,
+                    cashGiven: paymentMethod === 'Cash' ? Number(cashGiven) : netTotal,
+                    balance: paymentMethod === 'Cash' ? Number(cashGiven) - netTotal : 0,
+                    isOnlinePickup: false 
+                });
+                setCart([]); 
+                setSearchQuery(""); 
+                setIsCheckoutModalOpen(false);
+                setCashGiven('');
+                fetchData();
+                showAlert("Payment completed successfully!", "success");
                 setTimeout(() => window.print(), 300);
             }
-        } catch (error) { window.alert("Error during checkout."); }
+        } catch (error) { 
+            showAlert("Error during checkout.", "error"); 
+        }
     };
 
-    const handlePickupPayment = async (sale) => {
-        if(window.confirm(`Receive Rs.${sale.net_total} for Order ONL-${String(sale.id).padStart(4, '0')}?`)){
-            try {
-                await api.put(`/sales/${sale.id}`, { payment_status: 'Paid' });
-                setReceiptData({
-                    billNo: `ONL-${String(sale.id).padStart(4, '0')}`,
-                    date: new Date().toLocaleString(),
-                    items: [], 
-                    total: Number(sale.net_total),
-                    isOnlinePickup: true
-                });
-                setIsPickupModalOpen(false);
-                fetchData(); 
-                setTimeout(() => window.print(), 300);
-            } catch (error) { window.alert("Error updating payment."); }
+    const executePickupPayment = async (sale) => {
+        try {
+            await api.put(`/sales/${sale.id}`, { payment_status: 'Paid' });
+            setReceiptData({
+                billNo: `ONL-${String(sale.id).padStart(4, '0')}`,
+                date: new Date().toLocaleString(),
+                items: [], 
+                total: Number(sale.net_total),
+                paymentMethod: 'Cash (Online Pickup)',
+                cashGiven: Number(sale.net_total),
+                balance: 0,
+                isOnlinePickup: true
+            });
+            setIsPickupModalOpen(false);
+            fetchData(); 
+            showAlert("Online order collected and printed!", "success");
+            setTimeout(() => window.print(), 300);
+        } catch (error) { 
+            showAlert("Error updating payment.", "error"); 
         }
+        setConfirmModal({ show: false, message: '', onConfirm: null });
+    };
+
+    const handlePickupPayment = (sale) => {
+        setConfirmModal({
+            show: true,
+            message: `Receive Rs.${sale.net_total} for Order ONL-${String(sale.id).padStart(4, '0')}?`,
+            onConfirm: () => executePickupPayment(sale)
+        });
     };
 
     const filteredProducts = products.filter(product => product.name.toLowerCase().includes(searchQuery.toLowerCase()) || (product.barcode && product.barcode.includes(searchQuery)) || (product.plu_code && product.plu_code.includes(searchQuery)));
     
-    // customer_id තිබේ නම් ONL- හෝ නැත්නම් POS- ලෙස කේතය සකස් කිරීම
     const formatOrderCode = (sale) => {
         const prefix = sale.customer_id ? 'ONL' : 'POS';
         return `${prefix}-${String(sale.id).padStart(4, '0')}`;
@@ -143,7 +214,83 @@ const POSPage = () => {
 
     return (
         <>
-            <div className="flex h-screen bg-gray-100 print:hidden">
+            <div className="flex h-screen bg-gray-100 print:hidden relative">
+
+                {/* --- Toast Alert (Stable Tailwind classes) --- */}
+                {alertInfo.show && (
+                    <div className="fixed top-6 right-6 z-[9999] transition-all duration-300">
+                        <div className={`shadow-2xl text-white font-bold flex items-center gap-3 px-6 py-4 rounded-2xl ${
+                            alertInfo.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+                        }`}>
+                            <span>{alertInfo.type === 'success' ? '✅' : '❌'}</span>
+                            <span>{alertInfo.message}</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- Custom Custom Weight Prompt Modal --- */}
+                {weightPrompt.show && (
+                    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 animate-fade-in-up">
+                            <h3 className="text-xl font-black text-gray-800">Enter Weight</h3>
+                            <p className="text-sm text-gray-600 font-medium">
+                                Weight for <span className="font-bold text-blue-600">{weightPrompt.product?.name}</span> (in Kg):
+                            </p>
+                            <form onSubmit={handleWeightConfirm} className="space-y-4">
+                                <input 
+                                    type="number" 
+                                    step="0.001"
+                                    placeholder="e.g. 1.5"
+                                    value={weightPrompt.weight}
+                                    onChange={(e) => setWeightPrompt({ ...weightPrompt, weight: e.target.value })}
+                                    className="w-full border-2 border-gray-300 p-3 rounded-xl font-bold text-xl text-center focus:outline-none focus:border-blue-500 transition-colors"
+                                    autoFocus
+                                    onFocus={(e) => e.target.select()} // Automatically select the text "1" for easy overwrite
+                                />
+                                <div className="flex gap-3 pt-2">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setWeightPrompt({ show: false, product: null, weight: "1" })}
+                                        className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-xl transition-all"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        type="submit"
+                                        className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-all shadow-md"
+                                    >
+                                        Add to Bill
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- Custom Confirm Modal --- */}
+                {confirmModal.show && (
+                    <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9998] p-4 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 animate-fade-in-up">
+                            <h3 className="text-lg font-black text-gray-800">Confirm Payment</h3>
+                            <p className="text-sm text-gray-600 font-medium">{confirmModal.message}</p>
+                            <div className="flex gap-3 pt-2">
+                                <button 
+                                    onClick={() => setConfirmModal({ show: false, message: '', onConfirm: null })}
+                                    className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2.5 rounded-xl transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button 
+                                    onClick={confirmModal.onConfirm}
+                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-md"
+                                >
+                                    Confirm
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="w-2/3 p-6 flex flex-col h-full">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-3xl font-bold text-gray-800">Products</h2>
@@ -206,10 +353,65 @@ const POSPage = () => {
                     </div>
                     <div className="border-t-2 border-gray-200 pt-6 mt-4">
                         <div className="flex justify-between font-black text-2xl mb-6 text-gray-800"><span>TOTAL:</span><span className="text-blue-600">Rs. {netTotal.toFixed(2)}</span></div>
-                        <button onClick={handleCheckout} disabled={cart.length === 0} className={`w-full py-4 rounded-xl font-black text-xl shadow-lg ${cart.length === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>PAY NOW</button>
+                        <button onClick={() => { if (cart.length > 0) setIsCheckoutModalOpen(true); }} disabled={cart.length === 0} className={`w-full py-4 rounded-xl font-black text-xl shadow-lg ${cart.length === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-green-600 text-white hover:bg-green-700'}`}>PAY NOW</button>
                     </div>
                 </div>
             </div>
+
+            {/* CHECKOUT & PAYMENT MODAL */}
+            {isCheckoutModalOpen && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+                        <div className="flex justify-between items-center border-b pb-3">
+                            <h3 className="text-xl font-black text-gray-800">Select Payment Method</h3>
+                            <button onClick={() => setIsCheckoutModalOpen(false)} className="text-gray-500 font-bold text-2xl">&times;</button>
+                        </div>
+
+                        <div className="space-y-3">
+                            <label className={`flex items-center gap-3 p-3.5 border-2 rounded-xl cursor-pointer transition-all ${paymentMethod === 'Cash' ? 'border-blue-600 bg-blue-50' : 'border-gray-200'}`}>
+                                <input type="radio" name="posPayment" value="Cash" checked={paymentMethod === 'Cash'} onChange={() => setPaymentMethod('Cash')} className="w-5 h-5 text-blue-600" />
+                                <span className="font-bold text-gray-800 text-lg">💵 Cash Payment</span>
+                            </label>
+                            <label className={`flex items-center gap-3 p-3.5 border-2 rounded-xl cursor-pointer transition-all ${paymentMethod === 'Card' ? 'border-blue-600 bg-blue-50' : 'border-gray-200'}`}>
+                                <input type="radio" name="posPayment" value="Card" checked={paymentMethod === 'Card'} onChange={() => setPaymentMethod('Card')} className="w-5 h-5 text-blue-600" />
+                                <span className="font-bold text-gray-800 text-lg">💳 Card Payment</span>
+                            </label>
+                        </div>
+
+                        {paymentMethod === 'Cash' && (
+                            <div className="space-y-2 bg-gray-50 p-4 rounded-xl border">
+                                <label className="block text-xs font-bold uppercase text-gray-600">Cash Tendered (Given by Customer)</label>
+                                <input 
+                                    type="number" 
+                                    placeholder="Enter cash amount..." 
+                                    value={cashGiven} 
+                                    onChange={(e) => setCashGiven(e.target.value)} 
+                                    className="w-full border p-3 rounded-lg font-bold text-lg bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                                    autoFocus
+                                />
+                                {cashGiven !== '' && Number(cashGiven) >= netTotal && (
+                                    <div className="flex justify-between font-black text-green-600 text-lg pt-2 border-t">
+                                        <span>Balance Return:</span>
+                                        <span>Rs. {(Number(cashGiven) - netTotal).toFixed(2)}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="bg-gray-100 p-4 rounded-xl flex justify-between items-center font-black text-xl">
+                            <span>Total Payable:</span>
+                            <span className="text-blue-600">Rs. {netTotal.toFixed(2)}</span>
+                        </div>
+
+                        <button 
+                            onClick={handleConfirmCheckout} 
+                            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 rounded-xl shadow-lg text-lg transition-all"
+                        >
+                            Confirm & Print Bill
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* PICKUP MODAL */}
             {isPickupModalOpen && (
@@ -243,7 +445,7 @@ const POSPage = () => {
                                                 <div className="text-right flex items-center gap-4">
                                                     <span className="text-2xl font-black text-gray-800">Rs.{Number(sale.net_total).toFixed(2)}</span>
                                                     <button onClick={() => handlePickupPayment(sale)} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg shadow-md">
-                                                        Collect
+                                                        Collect & Print
                                                     </button>
                                                 </div>
                                             </div>
@@ -265,12 +467,12 @@ const POSPage = () => {
                     <div className="border-t border-b border-black border-dashed py-2 mb-3 mt-4">
                         <p className="text-xs">Bill No: {receiptData.billNo}</p>
                         <p className="text-xs">Date: {receiptData.date}</p>
+                        <p className="text-xs">Payment: {receiptData.paymentMethod}</p>
                     </div>
 
                     {receiptData.isOnlinePickup ? (
-                        <div className="py-6 text-center border-b border-black border-dashed">
-                            <h3 className="font-bold text-lg">ONLINE ORDER PICKUP</h3>
-                            <p className="text-xs mt-2">Items Packed Separately</p>
+                        <div className="py-4 text-center border-b border-black border-dashed">
+                            <h3 className="font-bold text-md">ONLINE ORDER PICKUP</h3>
                         </div>
                     ) : (
                         <table className="w-full text-xs mb-4">
@@ -285,12 +487,29 @@ const POSPage = () => {
                         </table>
                     )}
 
-                    <div className="border-t border-black border-dashed pt-2 mb-6">
-                        <div className="flex justify-between font-bold text-lg"><span>TOTAL</span><span>Rs. {receiptData.total.toFixed(2)}</span></div>
+                    <div className="border-t border-black border-dashed pt-2 mb-2 space-y-1">
+                        <div className="flex justify-between font-bold text-base"><span>TOTAL</span><span>Rs. {receiptData.total.toFixed(2)}</span></div>
+                        {receiptData.paymentMethod === 'Cash' && (
+                            <>
+                                <div className="flex justify-between text-xs"><span>Cash Given:</span><span>Rs. {receiptData.cashGiven.toFixed(2)}</span></div>
+                                <div className="flex justify-between text-xs font-bold"><span>Balance:</span><span>Rs. {receiptData.balance.toFixed(2)}</span></div>
+                            </>
+                        )}
                     </div>
-                    <p className="text-center text-xs font-bold">THANK YOU! COME AGAIN.</p>
+                    <p className="text-center text-xs font-bold mt-4">THANK YOU! COME AGAIN.</p>
                 </div>
             )}
+
+            {/* Animation Styles */}
+            <style>{`
+                @keyframes fadeInUp {
+                  from { opacity: 0; transform: translateY(15px); }
+                  to { opacity: 1; transform: translateY(0); }
+                }
+                .animate-fade-in-up {
+                  animation: fadeInUp 0.3s ease-out forwards;
+                }
+            `}</style>
         </>
     );
 };
