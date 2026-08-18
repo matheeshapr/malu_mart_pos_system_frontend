@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable'; 
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -44,8 +45,26 @@ const AdminDashboard = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
 
+  // --- Modern Toast Alert States & Function ---
+  const [alertInfo, setAlertInfo] = useState({ show: false, message: '', type: 'success' });
+
+  const showAlert = (message, type = 'success') => {
+    setAlertInfo({ show: true, message, type });
+    setTimeout(() => {
+      setAlertInfo({ show: false, message: '', type: 'success' });
+    }, 4000);
+  };
+
+  // --- Custom Confirm Modal State ---
+  const [confirmModal, setConfirmModal] = useState({ show: false, message: '', onConfirm: null });
+
+  // --- Fetch & Live Update (Every 10 seconds) ---
   useEffect(() => {
     fetchDashboardData();
+    const interval = setInterval(() => {
+      fetchDashboardData();
+    }, 10000); 
+    return () => clearInterval(interval);
   }, []);
 
   const fetchDashboardData = async () => {
@@ -90,13 +109,11 @@ const AdminDashboard = () => {
   const generatePDF = () => {
     const doc = new jsPDF();
     
-    // Header
     doc.setFontSize(18);
     doc.text("MaluMart Sales Report", 14, 15);
     doc.setFontSize(10);
     doc.text(`Period: ${startDate} to ${endDate}`, 14, 22);
 
-    // Table Data (customer_id අනුව ONL හෝ POS ලෙස කේතය සැකසීම)
     const tableColumn = ["Order ID", "Type", "Date & Time", "Total (Rs.)", "Status"];
     const tableRows = filteredSales.map(sale => [
         `${sale.customer_id ? 'ONL' : 'POS'}-${String(sale.id).padStart(4, '0')}`,
@@ -106,7 +123,6 @@ const AdminDashboard = () => {
         sale.payment_status
     ]);
 
-    // Generate Table
     autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
@@ -115,12 +131,11 @@ const AdminDashboard = () => {
         headStyles: { fillColor: [41, 128, 185] },
     });
 
-    // Add Total Revenue Footer
     const finalY = doc.lastAutoTable ? doc.lastAutoTable.finalY : 30;
     doc.text(`Total Revenue: Rs. ${filteredSales.reduce((sum, s) => sum + Number(s.net_total), 0).toFixed(2)}`, 14, finalY + 10);
 
-    // Save PDF
     doc.save(`MaluMart_Sales_${startDate}_to_${endDate}.pdf`);
+    showAlert("Sales report downloaded successfully!", "success");
   };
 
   const filteredSales = sales.filter(sale => {
@@ -135,7 +150,10 @@ const AdminDashboard = () => {
 
   const handleAddProduct = async (e) => {
     e.preventDefault();
-    if (!newProduct.category_id) return window.alert("Please select a Category!");
+    if (!newProduct.category_id) {
+      showAlert("Please select a Category!", "error");
+      return;
+    }
     try {
       const productData = {
         ...newProduct,
@@ -148,11 +166,11 @@ const AdminDashboard = () => {
         low_stock_alert: Number(newProduct.low_stock_alert)
       };
       await api.post('/products', productData);
-      window.alert("Product added successfully!");
+      showAlert("Product added successfully!", "success");
       fetchDashboardData();
       setNewProduct(initialFormState);
     } catch (error) {
-      window.alert("Failed to add product. Ensure PLU/Barcode is unique.");
+      showAlert("Failed to add product. Ensure PLU/Barcode is unique.", "error");
     }
   };
 
@@ -161,24 +179,31 @@ const AdminDashboard = () => {
     if (!newCategoryName.trim()) return;
     try {
       await api.post('/categories', { name: newCategoryName });
-      window.alert("Category added successfully!");
+      showAlert("Category added successfully!", "success");
       setNewCategoryName("");
       fetchDashboardData();
     } catch (error) {
-      window.alert("Failed to add category. It may already exist.");
+      showAlert("Failed to add category. It may already exist.", "error");
     }
   };
 
-  const handleDeleteCategory = async (id) => {
-    if (window.confirm("Are you sure you want to delete this category?")) {
-      try {
-        await api.delete(`/categories/${id}`);
-        window.alert("Category deleted successfully!");
-        fetchDashboardData();
-      } catch (error) {
-        window.alert("Cannot delete category. Products might be linked to it.");
-      }
+  const executeDeleteCategory = async (id) => {
+    try {
+      await api.delete(`/categories/${id}`);
+      showAlert("Category deleted successfully!", "success");
+      fetchDashboardData();
+    } catch (error) {
+      showAlert("Cannot delete category. Products might be linked to it.", "error");
     }
+    setConfirmModal({ show: false, message: '', onConfirm: null });
+  };
+
+  const handleDeleteCategory = (id) => {
+    setConfirmModal({
+      show: true,
+      message: "Are you sure you want to delete this category?",
+      onConfirm: () => executeDeleteCategory(id)
+    });
   };
 
   const handleAddStaffUser = async (e) => {
@@ -186,27 +211,34 @@ const AdminDashboard = () => {
     if (!staffName.trim() || !staffPin.trim()) return;
     try {
       await api.post('/users', { name: staffName, pin_code: staffPin, phone: staffPhone, role: staffRole });
-      window.alert("Staff user created successfully!");
+      showAlert("Staff user created successfully!", "success");
       setStaffName("");
       setStaffPin("");
       setStaffPhone("");
       setStaffRole("cashier");
       fetchDashboardData();
     } catch (error) {
-      window.alert(error.response?.data?.error || "Failed to create user.");
+      showAlert(error.response?.data?.error || "Failed to create user.", "error");
     }
   };
 
-  const handleDeleteStaffUser = async (id) => {
-    if (window.confirm("Are you sure you want to delete this staff user?")) {
-      try {
-        await api.delete(`/users/${id}`);
-        window.alert("Staff user deleted successfully!");
-        fetchDashboardData();
-      } catch (error) {
-        window.alert("Failed to delete user.");
-      }
+  const executeDeleteStaffUser = async (id) => {
+    try {
+      await api.delete(`/users/${id}`);
+      showAlert("Staff user deleted successfully!", "success");
+      fetchDashboardData();
+    } catch (error) {
+      showAlert("Failed to delete user.", "error");
     }
+    setConfirmModal({ show: false, message: '', onConfirm: null });
+  };
+
+  const handleDeleteStaffUser = (id) => {
+    setConfirmModal({
+      show: true,
+      message: "Are you sure you want to delete this staff user?",
+      onConfirm: () => executeDeleteStaffUser(id)
+    });
   };
 
   const handleEditClick = (product) => {
@@ -244,12 +276,12 @@ const AdminDashboard = () => {
         low_stock_alert: Number(editingProduct.low_stock_alert)
       };
       await api.put(`/products/${editingProduct.id}`, productData);
-      window.alert("Product updated successfully!");
+      showAlert("Product updated successfully!", "success");
       fetchDashboardData();
       setIsEditModalOpen(false);
       setEditingProduct(null);
     } catch (error) {
-      window.alert("Failed to update product. Ensure PLU/Barcode is unique.");
+      showAlert("Failed to update product. Ensure PLU/Barcode is unique.", "error");
     }
   };
 
@@ -258,16 +290,23 @@ const AdminDashboard = () => {
     setEditingProduct(null);
   };
 
-  const handleDeleteClick = async (id) => {
-    if (window.confirm("Are you sure you want to delete this product?")) {
-      try {
-        await api.delete(`/products/${id}`);
-        window.alert("Product deleted successfully!");
-        fetchDashboardData();
-      } catch (error) {
-        window.alert("Cannot delete this product. It might be linked to existing sales.");
-      }
+  const executeDeleteProduct = async (id) => {
+    try {
+      await api.delete(`/products/${id}`);
+      showAlert("Product deleted successfully!", "success");
+      fetchDashboardData();
+    } catch (error) {
+      showAlert("Cannot delete this product. It might be linked to existing sales.", "error");
     }
+    setConfirmModal({ show: false, message: '', onConfirm: null });
+  };
+
+  const handleDeleteClick = (id) => {
+    setConfirmModal({
+      show: true,
+      message: "Are you sure you want to delete this product?",
+      onConfirm: () => executeDeleteProduct(id)
+    });
   };
 
   const filteredProducts = products.filter(product => {
@@ -281,8 +320,58 @@ const AdminDashboard = () => {
 
   const pendingOrdersCount = sales.filter(s => s.payment_status === 'Pending').length;
 
+  // --- Calculations for Charts ---
+  const categorySales = categories.map(cat => {
+    const total = sales.reduce((sum, s) => {
+        const matches = s.items?.some(i => {
+            const prod = products.find(p => p.id === i.product_id);
+            return prod && prod.category_id === cat.id;
+        });
+        return sum + (matches ? Number(s.net_total) / categories.length : 0);
+    }, 0);
+    return { name: cat.name, value: Number(total.toFixed(2)) };
+  });
+
+  const COLORS = ['#2563eb', '#16a34a', '#eab308', '#dc2626', '#9333ea', '#06b6d4'];
+
   return (
-    <div className="flex h-screen bg-gray-100 relative">
+    <div className="min-h-screen bg-gray-50 flex relative">
+
+      {/* --- Floating Modern Toast Alert --- */}
+      {alertInfo.show && (
+        <div className="fixed top-6 right-6 z-50 transition-all animate-fade-in-up">
+          <div className={`shadow-2xl text-white font-bold flex items-center gap-3 px-6 py-4 rounded-2xl ${
+            alertInfo.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+          }`}>
+            <span>{alertInfo.type === 'success' ? '✅' : '❌'}</span>
+            <span>{alertInfo.message}</span>
+          </div>
+        </div>
+      )}
+
+      {/* --- Custom Confirm Modal --- */}
+      {confirmModal.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 animate-fade-in-up">
+            <h3 className="text-xl font-black text-gray-800">Confirm Action</h3>
+            <p className="text-sm text-gray-600 font-medium">{confirmModal.message}</p>
+            <div className="flex gap-3 pt-2">
+              <button 
+                onClick={() => setConfirmModal({ show: false, message: '', onConfirm: null })}
+                className="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-3 rounded-xl transition-all"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmModal.onConfirm}
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-all shadow-md"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sidebar Navigation */}
       <div className="w-64 bg-gray-800 text-white flex flex-col shadow-xl z-10">
@@ -349,16 +438,21 @@ const AdminDashboard = () => {
       {/* Main Content Area */}
       <div className="flex-1 p-8 overflow-y-auto">
 
-        {/* TAB 1: OVERVIEW */}
+        {/* TAB 1: OVERVIEW & LIVE CHARTS */}
         {activeTab === 'dashboard' && (
-          <div className="animate-fade-in">
-            <div className="flex justify-between items-center mb-8">
-              <h1 className="text-3xl font-black text-gray-800">System Overview</h1>
-              <button onClick={fetchDashboardData} className="bg-white border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-50 shadow-sm flex items-center gap-2">
+          <div className="animate-fade-in space-y-8">
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-black text-gray-800">System Overview</h1>
+                <p className="text-xs text-gray-500 mt-1">Live analytics updating every 10 seconds</p>
+              </div>
+              <button onClick={() => { fetchDashboardData(); showAlert("Data refreshed successfully!", "success"); }} className="bg-white border border-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg hover:bg-gray-50 shadow-sm flex items-center gap-2">
                 🔄 Refresh Data
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+
+            {/* Metrics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-blue-500">
                 <h3 className="text-gray-500 text-sm font-bold uppercase tracking-wider">Today's Paid Revenue</h3>
                 <p className="text-3xl font-black text-gray-800 mt-2">Rs. {todayRevenue.toFixed(2)}</p>
@@ -374,6 +468,46 @@ const AdminDashboard = () => {
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-red-500">
                 <h3 className="text-gray-500 text-sm font-bold uppercase tracking-wider">Low Stock Items</h3>
                 <p className="text-3xl font-black text-red-600 mt-2">{lowStockCount}</p>
+              </div>
+            </div>
+
+            {/* LIVE CHARTS SECTION */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Line Chart: Revenue Trends */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-black text-gray-800 mb-4">📈 Revenue Trends (Recent Sales)</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={sales.slice(0, 10).reverse()}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis dataKey="id" tick={{ fontSize: 12 }} />
+                    <YAxis tick={{ fontSize: 12 }} />
+                    <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 / 0.1)' }} />
+                    <Line type="monotone" dataKey="net_total" stroke="#2563eb" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Pie Chart: Sales Distribution by Category */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <h3 className="text-lg font-black text-gray-800 mb-4">📊 Sales by Category</h3>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie 
+                      data={categorySales} 
+                      dataKey="value" 
+                      nameKey="name" 
+                      cx="50%" 
+                      cy="50%" 
+                      outerRadius={100} 
+                      label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}
+                    >
+                      {categorySales.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', boxShadow: '0 4px 6px -1px rgb(0 0 / 0.1)' }} />
+                  </PieChart>
+                </ResponsiveContainer>
               </div>
             </div>
           </div>
@@ -807,7 +941,7 @@ const AdminDashboard = () => {
 
       {/* EDIT PRODUCT MODAL */}
       {isEditModalOpen && editingProduct && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-xs animate-fade-in">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden animate-fade-in-up">
             <div className="bg-yellow-500 px-6 py-4 flex justify-between items-center">
               <h2 className="text-xl font-black text-white">✏️ Edit Product: {editingProduct.name}</h2>
@@ -872,10 +1006,13 @@ const AdminDashboard = () => {
 
       {/* Animation Styles */}
       <style>{`
-        .animate-fade-in { animation: fadeIn 0.4s ease-in-out; }
-        .animate-fade-in-up { animation: fadeInUp 0.3s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(15px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+          animation: fadeInUp 0.3s ease-out forwards;
+        }
       `}</style>
     </div>
   );
