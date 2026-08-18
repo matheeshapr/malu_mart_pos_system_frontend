@@ -18,6 +18,16 @@ const CustomerStore = () => {
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [lastOrder, setLastOrder] = useState(null);
 
+  // --- Modern Toast Alert States & Function ---
+  const [alertInfo, setAlertInfo] = useState({ show: false, message: '', type: 'success' });
+
+  const showAlert = (message, type = 'success') => {
+    setAlertInfo({ show: true, message, type });
+    setTimeout(() => {
+      setAlertInfo({ show: false, message: '', type: 'success' });
+    }, 4000);
+  };
+
   useEffect(() => {
     fetchProducts();
   }, []);
@@ -34,6 +44,7 @@ const CustomerStore = () => {
   const handleLogout = () => {
     localStorage.removeItem('customer');
     setCustomer(null);
+    showAlert("Logged out successfully!", "success");
   };
 
   // --- Cart Functions ---
@@ -48,6 +59,7 @@ const CustomerStore = () => {
       return [...prevCart, { ...product, quantity: 1 }];
     });
     setIsCartOpen(true);
+    showAlert(`${product.name} added to cart!`, "success");
   };
 
   const updateQuantity = (id, delta) => {
@@ -67,13 +79,13 @@ const CustomerStore = () => {
   // --- Checkout & Order ---
   const handleCheckout = async () => {
     if (!customer) {
-      alert("Please login first to place an order!");
+      showAlert("Please login first to place an order!", "error");
       setIsAuthModalOpen(true);
       return;
     }
 
     if (cart.length === 0) {
-      alert("Your cart is empty!");
+      showAlert("Your cart is empty!", "error");
       return;
     }
 
@@ -109,10 +121,11 @@ const CustomerStore = () => {
         setLastOrder(orderDetails);
         setCart([]);
         setIsCheckoutOpen(false);
+        showAlert("Order placed successfully!", "success");
       }
     } catch (err) {
       console.error(err);
-      alert("Failed to place order. Please try again.");
+      showAlert("Failed to place order. Please try again.", "error");
     }
   };
 
@@ -122,7 +135,20 @@ const CustomerStore = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-12 animate-fade-in">
+    <div className="min-h-screen bg-gray-50 pb-12 animate-fade-in relative">
+      
+      {/* --- Floating Modern Toast Alert --- */}
+      {alertInfo.show && (
+        <div className="fixed top-6 right-6 z-50 transition-all animate-fade-in-up">
+          <div className={`shadow-2xl text-white font-bold flex items-center gap-3 px-6 py-4 rounded-2xl ${
+            alertInfo.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+          }`}>
+            <span>{alertInfo.type === 'success' ? '✅' : '❌'}</span>
+            <span>{alertInfo.message}</span>
+          </div>
+        </div>
+      )}
+
       {/* Navbar */}
       <nav className="bg-white shadow-sm px-8 py-4 flex justify-between items-center sticky top-0 z-40 transition-all">
         <h1 className="text-2xl font-black text-blue-600 cursor-pointer hover:opacity-80 transition-opacity" onClick={() => navigate('/store')}>
@@ -130,7 +156,7 @@ const CustomerStore = () => {
         </h1>
         
         <div className="flex items-center gap-4">
-          {/* Cart Button with Bounce effect on update */}
+          {/* Cart Button */}
           <button 
             onClick={() => setIsCartOpen(true)}
             className="relative bg-gray-100 hover:bg-gray-200 px-4 py-2.5 rounded-xl font-bold text-gray-700 flex items-center gap-2 transition-transform active:scale-95 shadow-sm"
@@ -365,10 +391,13 @@ const CustomerStore = () => {
       <CustomerAuthModal 
         isOpen={isAuthModalOpen} 
         onClose={() => setIsAuthModalOpen(false)} 
-        onLoginSuccess={(data) => setCustomer(data)} 
+        onLoginSuccess={(data) => {
+          setCustomer(data);
+          showAlert("Login successful!", "success");
+        }} 
       />
 
-      {/* Custom Inline CSS for extra smooth slide-in animation */}
+      {/* Custom Inline CSS for extra smooth animations */}
       <style>{`
         @keyframes slideInRight {
           from { transform: translateX(100%); }
