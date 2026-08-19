@@ -473,7 +473,6 @@ const AdminDashboard = () => {
 
             {/* LIVE CHARTS SECTION */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Line Chart: Revenue Trends */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-black text-gray-800 mb-4">📈 Revenue Trends (Recent Sales)</h3>
                 <ResponsiveContainer width="100%" height={300}>
@@ -487,7 +486,6 @@ const AdminDashboard = () => {
                 </ResponsiveContainer>
               </div>
 
-              {/* Pie Chart: Sales Distribution by Category */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-black text-gray-800 mb-4">📊 Sales by Category</h3>
                 <ResponsiveContainer width="100%" height={300}>
@@ -513,7 +511,7 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* TAB 2: PRODUCTS */}
+        {/* TAB 2: PRODUCTS & INVENTORY WITH LOW STOCK WARNINGS */}
         {activeTab === 'products' && (
           <div className="animate-fade-in">
             <h1 className="text-3xl font-black text-gray-800 mb-8">Product Management</h1>
@@ -581,7 +579,7 @@ const AdminDashboard = () => {
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="p-5 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
-                <h2 className="text-lg font-bold text-gray-800">Product Inventory</h2>
+                <h2 className="text-lg font-bold text-gray-800">Product Inventory & Stock Status</h2>
                 <input
                   type="text"
                   placeholder="Search products..."
@@ -594,32 +592,46 @@ const AdminDashboard = () => {
                 <table className="min-w-full leading-normal">
                   <thead>
                     <tr className="bg-white text-gray-500 text-left text-xs uppercase font-black tracking-wider border-b-2 border-gray-100">
-                      <th className="px-5 py-4">Name</th>
+                      <th className="px-5 py-4">Name & Status</th>
                       <th className="px-5 py-4">Barcode / PLU</th>
                       <th className="px-5 py-4">Cost</th>
                       <th className="px-5 py-4">Selling</th>
-                      <th className="px-5 py-4">Stock</th>
+                      <th className="px-5 py-4">Stock Qty</th>
                       <th className="px-5 py-4 text-center">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredProducts.map(product => (
-                      <tr key={product.id} className="hover:bg-blue-50 border-b border-gray-50 transition-colors">
-                        <td className="px-5 py-4 text-sm font-bold text-gray-800">{product.name}</td>
-                        <td className="px-5 py-4 text-sm text-gray-500 font-mono">
-                          {product.is_weighed ? `PLU:${product.plu_code}` : `BC:${product.barcode}`}
-                        </td>
-                        <td className="px-5 py-4 text-sm text-gray-500">{product.cost_price}</td>
-                        <td className="px-5 py-4 text-sm font-black text-blue-600">{product.selling_price}</td>
-                        <td className={`px-5 py-4 text-sm font-black ${Number(product.stock_quantity) <= Number(product.low_stock_alert) ? 'text-red-500' : 'text-green-500'}`}>
-                          {product.stock_quantity}
-                        </td>
-                        <td className="px-5 py-4 text-sm text-center whitespace-nowrap">
-                          <button onClick={() => handleEditClick(product)} className="text-yellow-600 hover:text-yellow-800 font-bold mr-4 px-2 py-1 bg-yellow-100 rounded">Edit</button>
-                          <button onClick={() => handleDeleteClick(product.id)} className="text-red-500 hover:text-red-700 font-bold px-2 py-1 bg-red-100 rounded">Delete</button>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredProducts.map(product => {
+                      const isOutOfStock = Number(product.stock_quantity) <= 0;
+                      const isLowStock = !isOutOfStock && Number(product.stock_quantity) <= Number(product.low_stock_alert);
+
+                      return (
+                        <tr key={product.id} className={`border-b border-gray-50 transition-colors ${isOutOfStock ? 'bg-red-50/50' : isLowStock ? 'bg-yellow-50/60' : 'hover:bg-blue-50'}`}>
+                          <td className="px-5 py-4 text-sm font-bold text-gray-800 flex items-center gap-3">
+                            <span>{product.name}</span>
+                            {isOutOfStock ? (
+                              <span className="bg-red-100 text-red-600 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Out of Stock</span>
+                            ) : isLowStock ? (
+                              <span className="bg-yellow-100 text-yellow-800 text-[10px] font-black px-2 py-0.5 rounded-full uppercase animate-pulse">⚠️ Low Stock Warning</span>
+                            ) : null}
+                          </td>
+                          <td className="px-5 py-4 text-sm text-gray-500 font-mono">
+                            {product.is_weighed ? `PLU:${product.plu_code}` : `BC:${product.barcode}`}
+                          </td>
+                          <td className="px-5 py-4 text-sm text-gray-500">{product.cost_price}</td>
+                          <td className="px-5 py-4 text-sm font-black text-blue-600">{product.selling_price}</td>
+                          <td className="px-5 py-4 text-sm font-black">
+                            <span className={`${isOutOfStock ? 'text-red-600' : isLowStock ? 'text-yellow-600' : 'text-green-600'}`}>
+                              {product.stock_quantity}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-sm text-center whitespace-nowrap">
+                            <button onClick={() => handleEditClick(product)} className="text-yellow-600 hover:text-yellow-800 font-bold mr-4 px-2 py-1 bg-yellow-100 rounded">Edit</button>
+                            <button onClick={() => handleDeleteClick(product.id)} className="text-red-500 hover:text-red-700 font-bold px-2 py-1 bg-red-100 rounded">Delete</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -795,7 +807,6 @@ const AdminDashboard = () => {
               </button>
             </div>
 
-            {/* Date Filter Bar */}
             <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 mb-6 flex flex-wrap gap-4 items-end print:hidden">
               <div>
                 <label className="block text-xs font-bold text-gray-600 uppercase mb-1">From Date</label>
@@ -820,7 +831,6 @@ const AdminDashboard = () => {
               </div>
             </div>
 
-            {/* Print Header */}
             <div className="hidden print:block mb-6 text-center border-b pb-4">
               <h1 className="text-2xl font-black">MALUMART SALES REPORT</h1>
               <p className="text-gray-600 text-sm mt-1">Period: {startDate} to {endDate}</p>
@@ -1004,7 +1014,6 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Animation Styles */}
       <style>{`
         @keyframes fadeInUp {
           from { opacity: 0; transform: translateY(15px); }
