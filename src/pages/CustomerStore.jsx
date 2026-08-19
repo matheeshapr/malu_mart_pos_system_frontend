@@ -345,7 +345,7 @@ const CustomerStore = () => {
           </div>
         </div>
 
-        {/* Product Grid (Out of stock text is clear, no blur) */}
+        {/* Product Grid */}
         <div>
           <h3 className="text-2xl font-black text-gray-800 mb-6">Available Products</h3>
           
@@ -366,12 +366,12 @@ const CustomerStore = () => {
                     }`}
                   >
                     <div>
-                      {/* Image container without blur */}
-                      <div className="w-full h-44 bg-blue-50/50 rounded-2xl overflow-hidden mb-4 border border-gray-100 relative">
+                      {/* Image container fixed with white background and object-contain to prevent cropping */}
+                      <div className="w-full h-48 bg-white rounded-2xl overflow-hidden mb-4 border border-gray-100 relative flex items-center justify-center p-2">
                         <img 
                           src={product.image_url || "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=500&auto=format&fit=crop&q=60"} 
                           alt={product.name} 
-                          className={`w-full h-full object-cover ${isOutOfStock ? 'grayscale opacity-60' : 'group-hover:scale-110'} transition-transform duration-500`}
+                          className={`max-h-full max-w-full object-contain ${isOutOfStock ? 'grayscale opacity-60' : 'group-hover:scale-105'} transition-transform duration-500`}
                         />
                         {isOutOfStock && (
                           <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
@@ -512,64 +512,66 @@ const CustomerStore = () => {
 
       {/* Bill Modal */}
       {lastOrder && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl space-y-6 print:shadow-none print:w-full print:m-0 animate-fade-in-up">
-            <div className="text-center border-b pb-4 border-gray-100">
-              <h2 className="text-2xl font-black text-blue-600">MaluMart Store</h2>
-              <p className="text-xs text-gray-400">Fresh Fish & Quality Products</p>
-              <p className="text-xs font-bold text-gray-700 mt-2">Order Receipt / Invoice</p>
-            </div>
+        123 && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 backdrop-blur-xs">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-lg shadow-2xl space-y-6 print:shadow-none print:w-full print:m-0 animate-fade-in-up">
+              <div className="text-center border-b pb-4 border-gray-100">
+                <h2 className="text-2xl font-black text-blue-600">MaluMart Store</h2>
+                <p className="text-xs text-gray-400">Fresh Fish & Quality Products</p>
+                <p className="text-xs font-bold text-gray-700 mt-2">Order Receipt / Invoice</p>
+              </div>
 
-            <div className="text-xs space-y-1.5 text-gray-600 bg-gray-50 p-4 rounded-2xl border border-gray-100">
-              <p><b>Order ID:</b> ONL-{String(lastOrder.orderId).padStart(4, '0')}</p>
-              <p><b>Date:</b> {lastOrder.date}</p>
-              <p><b>Customer:</b> {lastOrder.customer.name} ({lastOrder.customer.phone})</p>
-              <p><b>Delivery Address:</b> {lastOrder.customer.address || 'Not Provided'}</p>
-              <p><b>Payment Method:</b> {lastOrder.paymentMethod}</p>
-            </div>
+              <div className="text-xs space-y-1.5 text-gray-600 bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                <p><b>Order ID:</b> ONL-{String(lastOrder.orderId).padStart(4, '0')}</p>
+                <p><b>Date:</b> {lastOrder.date}</p>
+                <p><b>Customer:</b> {lastOrder.customer.name} ({lastOrder.customer.phone})</p>
+                <p><b>Delivery Address:</b> {lastOrder.customer.address || 'Not Provided'}</p>
+                <p><b>Payment Method:</b> {lastOrder.paymentMethod}</p>
+              </div>
 
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-gray-200 text-gray-400">
-                  <th className="py-2">Item</th>
-                  <th className="py-2 text-center">Qty</th>
-                  <th className="py-2 text-right">Price</th>
-                  <th className="py-2 text-right">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {lastOrder.items.map((item, idx) => (
-                  <tr key={idx} className="border-b border-gray-50">
-                    <td className="py-2.5 font-bold text-gray-800">{item.name}</td>
-                    <td className="py-2.5 text-center text-gray-600">{item.quantity}</td>
-                    <td className="py-2.5 text-right text-gray-600">Rs. {Number(item.selling_price).toFixed(2)}</td>
-                    <td className="py-2.5 text-right font-black text-gray-800">Rs. {(Number(item.selling_price) * item.quantity).toFixed(2)}</td>
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-200 text-gray-400">
+                    <th className="py-2">Item</th>
+                    <th className="py-2 text-center">Qty</th>
+                    <th className="py-2 text-right">Price</th>
+                    <th className="py-2 text-right">Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {lastOrder.items.map((item, idx) => (
+                    <tr key={idx} className="border-b border-gray-50">
+                      <td className="py-2.5 font-bold text-gray-800">{item.name}</td>
+                      <td className="py-2.5 text-center text-gray-600">{item.quantity}</td>
+                      <td className="py-2.5 text-right text-gray-600">Rs. {Number(item.selling_price).toFixed(2)}</td>
+                      <td className="py-2.5 text-right font-black text-gray-800">Rs. {(Number(item.selling_price) * item.quantity).toFixed(2)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-            <div className="flex justify-between items-center text-base font-black border-t border-gray-200 pt-3">
-              <span>Total Amount:</span>
-              <span className="text-blue-600 text-xl">Rs. {lastOrder.total.toFixed(2)}</span>
-            </div>
+              <div className="flex justify-between items-center text-base font-black border-t border-gray-200 pt-3">
+                <span>Total Amount:</span>
+                <span className="text-blue-600 text-xl">Rs. {lastOrder.total.toFixed(2)}</span>
+              </div>
 
-            <div className="flex gap-4 print:hidden pt-2">
-              <button 
-                onClick={handlePrintBill}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-2xl shadow-lg transition-all active:scale-95"
-              >
-                🖨️ Print / Save Bill
-              </button>
-              <button 
-                onClick={() => setLastOrder(null)}
-                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-2xl transition-all active:scale-95"
-              >
-                Close
-              </button>
+              <div className="flex gap-4 print:hidden pt-2">
+                <button 
+                  onClick={handlePrintBill}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-2xl shadow-lg transition-all active:scale-95"
+                >
+                  🖨️ Print / Save Bill
+                </button>
+                <button 
+                  onClick={() => setLastOrder(null)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-2xl transition-all active:scale-95"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )
       )}
 
       <CustomerAuthModal 
