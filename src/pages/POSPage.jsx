@@ -45,8 +45,15 @@ const POSPage = () => {
     const barcodeBuffer = useRef("");
     const typingTimeout = useRef(null);
 
+    // --- Real-time Live Polling Effect (Every 5 seconds) ---
     useEffect(() => {
         fetchData();
+        
+        const liveInterval = setInterval(() => {
+            fetchData();
+        }, 5000); 
+
+        return () => clearInterval(liveInterval); 
     }, []);
 
     const fetchData = async () => {
@@ -82,12 +89,22 @@ const POSPage = () => {
             const pluCode = scannedCode.substring(2, 7);
             const weightInKg = Number(scannedCode.substring(7, 12)) / 1000;
             const matchedProduct = products.find(p => p.plu_code === pluCode);
-            if (matchedProduct) addToCart(matchedProduct, weightInKg);
-            else showAlert(`Weighed product not found for PLU: ${pluCode}`, "error");
+            if (matchedProduct) {
+                if (Number(matchedProduct.stock_quantity) <= 0) {
+                    showAlert(`Product ${matchedProduct.name} is Out of Stock!`, "error");
+                } else {
+                    addToCart(matchedProduct, weightInKg);
+                }
+            } else showAlert(`Weighed product not found for PLU: ${pluCode}`, "error");
         } else {
             const matchedProduct = products.find(p => p.barcode === scannedCode);
-            if (matchedProduct) addToCart(matchedProduct);
-            else showAlert("Product not found for barcode: " + scannedCode, "error");
+            if (matchedProduct) {
+                if (Number(matchedProduct.stock_quantity) <= 0) {
+                    showAlert(`Product ${matchedProduct.name} is Out of Stock!`, "error");
+                } else {
+                    addToCart(matchedProduct);
+                }
+            } else showAlert("Product not found for barcode: " + scannedCode, "error");
         }
     };
 
@@ -98,28 +115,30 @@ const POSPage = () => {
         setManualBarcode("");
     };
 
-    // --- Add to Cart Logic (Re-written for Custom Modal) ---
     const addToCart = (product, scannedWeight = null) => {
+        if (Number(product.stock_quantity) <= 0) {
+            showAlert(`${product.name} is Out of Stock!`, "error");
+            return;
+        }
+
         if (product.is_weighed && scannedWeight === null) {
-            // Open custom weight prompt instead of window.prompt
             setWeightPrompt({ show: true, product: product, weight: "1" });
             return; 
         } 
         
-        // If not weighed, or if scanned via barcode scale, proceed directly
         const qty = scannedWeight !== null ? scannedWeight : 1;
         finalizeAddToCart(product, qty);
     };
 
     const handleWeightConfirm = (e) => {
-        e.preventDefault(); // Prevent form default submission
+        e.preventDefault();
         const qty = Number(weightPrompt.weight);
         if (!qty || isNaN(qty) || qty <= 0) {
             showAlert("Please enter a valid weight!", "error");
             return;
         }
         finalizeAddToCart(weightPrompt.product, qty);
-        setWeightPrompt({ show: false, product: null, weight: "1" }); // Close modal
+        setWeightPrompt({ show: false, product: null, weight: "1" });
     };
 
     const finalizeAddToCart = (product, qty) => {
@@ -216,7 +235,6 @@ const POSPage = () => {
         <>
             <div className="flex h-screen bg-gray-100 print:hidden relative">
 
-                {/* --- Toast Alert (Stable Tailwind classes) --- */}
                 {alertInfo.show && (
                     <div className="fixed top-6 right-6 z-[9999] transition-all duration-300">
                         <div className={`shadow-2xl text-white font-bold flex items-center gap-3 px-6 py-4 rounded-2xl ${
@@ -228,7 +246,6 @@ const POSPage = () => {
                     </div>
                 )}
 
-                {/* --- Custom Custom Weight Prompt Modal --- */}
                 {weightPrompt.show && (
                     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9999] p-4 backdrop-blur-sm">
                         <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 animate-fade-in-up">
@@ -245,7 +262,7 @@ const POSPage = () => {
                                     onChange={(e) => setWeightPrompt({ ...weightPrompt, weight: e.target.value })}
                                     className="w-full border-2 border-gray-300 p-3 rounded-xl font-bold text-xl text-center focus:outline-none focus:border-blue-500 transition-colors"
                                     autoFocus
-                                    onFocus={(e) => e.target.select()} // Automatically select the text "1" for easy overwrite
+                                    onFocus={(e) => e.target.select()}
                                 />
                                 <div className="flex gap-3 pt-2">
                                     <button 
@@ -267,7 +284,6 @@ const POSPage = () => {
                     </div>
                 )}
 
-                {/* --- Custom Confirm Modal --- */}
                 {confirmModal.show && (
                     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-[9998] p-4 backdrop-blur-sm">
                         <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl space-y-4 animate-fade-in-up">
@@ -315,16 +331,40 @@ const POSPage = () => {
 
                     <div className="overflow-y-auto pr-2 flex-grow">
                         <div className="grid grid-cols-3 gap-4 pb-4">
-                            {filteredProducts.map((product) => (
-                                <div key={product.id} onClick={() => addToCart(product)} className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md cursor-pointer hover:bg-blue-50 border border-gray-200 flex flex-col justify-between">
-                                    <div>
-                                        <h3 className="font-bold text-lg text-gray-800 mb-1 leading-tight">{product.name}</h3>
-                                        <p className="text-blue-600 font-extrabold text-lg mt-2">Rs. {product.selling_price}</p>
-                                        <p className="text-sm text-gray-500 mt-1 font-medium">Stock: {product.stock_quantity}</p>
+                            {filteredProducts.map((product) => {
+                                const isOutOfStock = Number(product.stock_quantity) <= 0;
+                                const isLowStock = !isOutOfStock && Number(product.stock_quantity) <= Number(product.low_stock_alert);
+
+                                return (
+                                    <div 
+                                        key={product.id} 
+                                        onClick={() => !isOutOfStock && addToCart(product)} 
+                                        className={`p-4 rounded-xl border flex flex-col justify-between transition-all ${
+                                            isOutOfStock 
+                                                ? 'bg-gray-100 border-gray-300 opacity-60 cursor-not-allowed' 
+                                                : isLowStock 
+                                                    ? 'bg-yellow-50/80 border-yellow-300 hover:shadow-md cursor-pointer hover:bg-yellow-100' 
+                                                    : 'bg-white border-gray-200 hover:shadow-md cursor-pointer hover:bg-blue-50'
+                                        }`}
+                                    >
+                                        <div>
+                                            <div className="flex justify-between items-start mb-1">
+                                                <h3 className="font-bold text-lg text-gray-800 leading-tight">{product.name}</h3>
+                                                {isOutOfStock ? (
+                                                    <span className="text-xs bg-red-100 text-red-600 font-black px-2 py-0.5 rounded">Out of Stock</span>
+                                                ) : isLowStock ? (
+                                                    <span className="text-xs bg-yellow-200 text-yellow-800 font-bold px-2 py-0.5 rounded animate-pulse">⚠️ Low Stock</span>
+                                                ) : null}
+                                            </div>
+                                            <p className="text-blue-600 font-extrabold text-lg mt-2">Rs. {product.selling_price}</p>
+                                            <p className={`text-sm mt-1 font-medium ${isLowStock ? 'text-yellow-700 font-bold' : 'text-gray-500'}`}>
+                                                Stock: {product.stock_quantity}
+                                            </p>
+                                        </div>
+                                        {product.is_weighed && <span className="text-xs text-center text-blue-800 bg-blue-100 font-bold px-2 py-1.5 rounded mt-3 inline-block">⚖️ Weighed Item</span>}
                                     </div>
-                                    {product.is_weighed && <span className="text-xs text-center text-blue-800 bg-blue-100 font-bold px-2 py-1.5 rounded mt-3 inline-block">⚖️ Weighed Item</span>}
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -500,7 +540,6 @@ const POSPage = () => {
                 </div>
             )}
 
-            {/* Animation Styles */}
             <style>{`
                 @keyframes fadeInUp {
                   from { opacity: 0; transform: translateY(15px); }
