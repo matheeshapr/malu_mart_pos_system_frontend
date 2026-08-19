@@ -373,8 +373,8 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Sidebar Navigation */}
-      <div className="w-64 bg-gray-800 text-white flex flex-col shadow-xl z-10">
+      {/* Sidebar Navigation (Width increased to w-72 for ample spacing) */}
+      <div className="w-72 bg-gray-800 text-white flex flex-col shadow-xl z-10 shrink-0">
         <div className="p-6 text-2xl font-black tracking-wide border-b border-gray-700 bg-gray-900">
           MaluMart Admin
         </div>
@@ -393,7 +393,7 @@ const AdminDashboard = () => {
           >
             <span>Products Management</span>
             {lowStockCount > 0 && (
-              <span className="bg-red-500 text-white text-xs font-black px-2 py-0.5 rounded-full animate-pulse shadow-sm">
+              <span className="bg-red-500 text-white text-xs font-black px-2 py-1 rounded-full animate-pulse shadow-sm shrink-0">
                 {lowStockCount} Low
               </span>
             )}
@@ -417,7 +417,7 @@ const AdminDashboard = () => {
           >
             <span>Orders & Sales</span>
             {pendingOrdersCount > 0 && (
-              <span className="bg-yellow-500 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full">
+              <span className="bg-yellow-500 text-yellow-900 text-xs font-bold px-2 py-1 rounded-full shrink-0">
                 {pendingOrdersCount} New
               </span>
             )}
