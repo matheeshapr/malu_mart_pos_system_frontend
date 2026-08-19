@@ -385,12 +385,20 @@ const AdminDashboard = () => {
           >
             Dashboard
           </button>
+          
+          {/* Products Management with Low Stock Notification Badge */}
           <button
             onClick={() => setActiveTab('products')}
-            className={`w-full text-left py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'products' ? 'bg-blue-600 shadow-md' : 'hover:bg-gray-700'}`}
+            className={`w-full text-left py-3 px-4 rounded-lg font-medium transition-all flex justify-between items-center ${activeTab === 'products' ? 'bg-blue-600 shadow-md' : 'hover:bg-gray-700'}`}
           >
-            Products Management
+            <span>Products Management</span>
+            {lowStockCount > 0 && (
+              <span className="bg-red-500 text-white text-xs font-black px-2 py-0.5 rounded-full animate-pulse shadow-sm">
+                {lowStockCount} Low
+              </span>
+            )}
           </button>
+
           <button
             onClick={() => setActiveTab('categories')}
             className={`w-full text-left py-3 px-4 rounded-lg font-medium transition-all ${activeTab === 'categories' ? 'bg-blue-600 shadow-md' : 'hover:bg-gray-700'}`}
