@@ -38,7 +38,7 @@ const AdminDashboard = () => {
 
   const initialFormState = {
     category_id: '', name: '', is_weighed: false, plu_code: '', barcode: '',
-    cost_price: '', selling_price: '', stock_quantity: '', low_stock_alert: ''
+    cost_price: '', selling_price: '', stock_quantity: '', low_stock_alert: '', image_url: ''
   };
   const [newProduct, setNewProduct] = useState(initialFormState);
 
@@ -163,7 +163,8 @@ const AdminDashboard = () => {
         cost_price: Number(newProduct.cost_price),
         selling_price: Number(newProduct.selling_price),
         stock_quantity: Number(newProduct.stock_quantity),
-        low_stock_alert: Number(newProduct.low_stock_alert)
+        low_stock_alert: Number(newProduct.low_stock_alert),
+        image_url: newProduct.image_url.trim() === '' ? null : newProduct.image_url
       };
       await api.post('/products', productData);
       showAlert("Product added successfully!", "success");
@@ -252,7 +253,8 @@ const AdminDashboard = () => {
       cost_price: product.cost_price,
       selling_price: product.selling_price,
       stock_quantity: product.stock_quantity,
-      low_stock_alert: product.low_stock_alert
+      low_stock_alert: product.low_stock_alert,
+      image_url: product.image_url || ''
     });
     setIsEditModalOpen(true);
   };
@@ -273,7 +275,8 @@ const AdminDashboard = () => {
         cost_price: Number(editingProduct.cost_price),
         selling_price: Number(editingProduct.selling_price),
         stock_quantity: Number(editingProduct.stock_quantity),
-        low_stock_alert: Number(editingProduct.low_stock_alert)
+        low_stock_alert: Number(editingProduct.low_stock_alert),
+        image_url: editingProduct.image_url.trim() === '' ? null : editingProduct.image_url
       };
       await api.put(`/products/${editingProduct.id}`, productData);
       showAlert("Product updated successfully!", "success");
@@ -320,7 +323,6 @@ const AdminDashboard = () => {
 
   const pendingOrdersCount = sales.filter(s => s.payment_status === 'Pending').length;
 
-  // --- Calculations for Charts ---
   const categorySales = categories.map(cat => {
     const total = sales.reduce((sum, s) => {
         const matches = s.items?.some(i => {
@@ -337,7 +339,6 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex relative">
 
-      {/* --- Floating Modern Toast Alert --- */}
       {alertInfo.show && (
         <div className="fixed top-6 right-6 z-50 transition-all animate-fade-in-up">
           <div className={`shadow-2xl text-white font-bold flex items-center gap-3 px-6 py-4 rounded-2xl ${
@@ -349,7 +350,6 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* --- Custom Confirm Modal --- */}
       {confirmModal.show && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-xs animate-fade-in">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-4 animate-fade-in-up">
@@ -373,7 +373,7 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {/* Sidebar Navigation (Width increased to w-72 for ample spacing) */}
+      {/* Sidebar Navigation */}
       <div className="w-72 bg-gray-800 text-white flex flex-col shadow-xl z-10 shrink-0">
         <div className="p-6 text-2xl font-black tracking-wide border-b border-gray-700 bg-gray-900">
           MaluMart Admin
@@ -386,7 +386,6 @@ const AdminDashboard = () => {
             Dashboard
           </button>
           
-          {/* Products Management with Low Stock Notification Badge */}
           <button
             onClick={() => setActiveTab('products')}
             className={`w-full text-left py-3 px-4 rounded-lg font-medium transition-all flex justify-between items-center ${activeTab === 'products' ? 'bg-blue-600 shadow-md' : 'hover:bg-gray-700'}`}
@@ -446,7 +445,6 @@ const AdminDashboard = () => {
       {/* Main Content Area */}
       <div className="flex-1 p-8 overflow-y-auto">
 
-        {/* TAB 1: OVERVIEW & LIVE CHARTS */}
         {activeTab === 'dashboard' && (
           <div className="animate-fade-in space-y-8">
             <div className="flex justify-between items-center">
@@ -459,7 +457,6 @@ const AdminDashboard = () => {
               </button>
             </div>
 
-            {/* Metrics Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 border-l-4 border-l-blue-500">
                 <h3 className="text-gray-500 text-sm font-bold uppercase tracking-wider">Today's Paid Revenue</h3>
@@ -479,7 +476,6 @@ const AdminDashboard = () => {
               </div>
             </div>
 
-            {/* LIVE CHARTS SECTION */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <h3 className="text-lg font-black text-gray-800 mb-4">📈 Revenue Trends (Recent Sales)</h3>
@@ -519,7 +515,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* TAB 2: PRODUCTS & INVENTORY WITH LOW STOCK WARNINGS */}
         {activeTab === 'products' && (
           <div className="animate-fade-in">
             <h1 className="text-3xl font-black text-gray-800 mb-8">Product Management</h1>
@@ -575,6 +570,12 @@ const AdminDashboard = () => {
                 <div>
                   <label className="block text-gray-700 text-sm font-bold mb-1">Alert At *</label>
                   <input type="number" step="0.001" name="low_stock_alert" value={newProduct.low_stock_alert} onChange={handleInputChange} required className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" />
+                </div>
+
+                {/* --- Image URL Input Added Here --- */}
+                <div className="col-span-3">
+                  <label className="block text-gray-700 text-sm font-bold mb-1">Image Link (URL)</label>
+                  <input type="text" name="image_url" placeholder="https://example.com/fish.jpg" value={newProduct.image_url} onChange={handleInputChange} className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
 
                 <div className="col-span-4 mt-4 flex justify-end border-t pt-4">
@@ -647,7 +648,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* TAB 3: CATEGORIES MANAGEMENT */}
         {activeTab === 'categories' && (
           <div className="animate-fade-in">
             <h1 className="text-3xl font-black text-gray-800 mb-8">Category Management</h1>
@@ -699,7 +699,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* TAB 4: STAFF MANAGEMENT */}
         {activeTab === 'users' && (
           <div className="animate-fade-in">
             <h1 className="text-3xl font-black text-gray-800 mb-8">Staff & Cashier Management</h1>
@@ -802,7 +801,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* TAB 5: SALES */}
         {activeTab === 'sales' && (
           <div className="animate-fade-in">
             <div className="flex justify-between items-center mb-6 print:hidden">
@@ -915,7 +913,6 @@ const AdminDashboard = () => {
           </div>
         )}
 
-        {/* TAB 6: CUSTOMERS LIST */}
         {activeTab === 'customers' && (
           <div className="animate-fade-in">
             <h1 className="text-3xl font-black text-gray-800 mb-8">Registered Customers</h1>
@@ -1008,6 +1005,13 @@ const AdminDashboard = () => {
                   <label className="block text-gray-700 text-sm font-bold mb-1">Alert At *</label>
                   <input type="number" step="0.001" name="low_stock_alert" value={editingProduct.low_stock_alert} onChange={handleEditInputChange} required className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-yellow-500 outline-none" />
                 </div>
+
+                {/* --- Image URL Input Added Here for Edit Modal --- */}
+                <div className="col-span-3">
+                  <label className="block text-gray-700 text-sm font-bold mb-1">Image Link (URL)</label>
+                  <input type="text" name="image_url" placeholder="https://example.com/fish.jpg" value={editingProduct.image_url} onChange={handleEditInputChange} className="w-full border rounded-lg p-2.5 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-yellow-500 outline-none" />
+                </div>
+
                 <div className="col-span-4 mt-4 flex justify-end gap-3 border-t pt-4">
                   <button type="button" onClick={closeEditModal} className="px-6 py-2.5 font-bold text-gray-600 bg-gray-200 rounded-lg hover:bg-gray-300">
                     Cancel
