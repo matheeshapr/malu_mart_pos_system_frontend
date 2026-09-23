@@ -1,16 +1,35 @@
-# React + Vite
+# 🐟 MaluMart - Customer Store & Cashier POS (Frontend)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+MaluMart is a modern, full-stack POS and E-commerce web application built for fresh fish and seafood markets. This repository contains the **Frontend** built with React, Vite, and Tailwind CSS.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## ✨ Features
 
-## React Compiler
+### 🛒 Customer Store (`/store`)
+- **Modern Glassmorphic Navbar:** Quick access to cart, user profile, and authentication.
+- **Auto-Sliding Hero Banner:** High-quality seafood market visuals with smooth transitions and smooth-scroll "Shop Now" action.
+- **Category Filtering & Search:** Easily browse items by categories or search by name.
+- **Optimized Product Cards:** Custom image container (`object-contain` with a clean white background) to prevent vertical image cropping or distortion.
+- **Stock Management Integration:** Live display of "In Stock" or "Out of Stock" status. Out-of-stock items have clear badges and disabled cart buttons.
+- **Shopping Cart & Checkout:** Slide-over cart drawer, quantity adjustments, Cash on Delivery (COD) / Card payment options, and an instant printable invoice modal.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### 🏪 Cashier POS Screen (`/pos`)
+- **Split Layout:** Fast product catalog lookup on the left, active bill summary on the right.
+- **Barcode & Scale Integration:** Supports standard barcodes and electronic weighing scale PLU barcodes (e.g., 13-digit codes starting with "20" extracting weight in Kg).
+- **Custom Weight Prompt:** Secure modal input for weighed items.
+- **Real-Time Online Pickups:** Auto-polls backend every 5 seconds (`setInterval`) to fetch pending online customer orders instantly without manual page reloads. Cashier can collect payment, print thermal-style receipts, and update order statuses.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🛠️ Tech Stack
+
+- **Framework:** React (Vite)
+- **Styling:** Tailwind CSS
+- **HTTP Client:** Axios
+- **Charts & Reports:** Recharts, jsPDF, jspdf-autotable
+- **Routing:** React Router DOM
+
+---
+
+   
